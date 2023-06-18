@@ -1,7 +1,5 @@
 # Java_Project
 
-Sure! Here's a short README for the chat application:
-
 ## Chat Application
 
 This is a simple chat application built using Java Swing, allowing users to communicate with each other in real-time.
