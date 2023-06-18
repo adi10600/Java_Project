@@ -12,6 +12,8 @@ public class Server {
 
     public Server() {
         try {
+
+            
             // Create a server socket and start listening for incoming connections
             ServerSocket serverSocket = new ServerSocket(8000);
             System.out.println("Chat Server started on port 8000.");
