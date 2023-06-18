@@ -1,7 +1,4 @@
-# Java_Project
-
-## Chat Application
-
+# Java_Project: Chat Application
 This is a simple chat application built using Java Swing, allowing users to communicate with each other in real-time.
 The name we have provided as "Chatter App"
 
