@@ -1,38 +1,46 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+// Server
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Server {
-    private Set<PrintWriter> clientWriters = new HashSet<>();
+    private List<ClientHandler> clients;
 
-    public Server() {
+    public Server(int port) {
+        clients = new ArrayList<>();
+
         try {
-
-            
-            // Create a server socket and start listening for incoming connections
-            ServerSocket serverSocket = new ServerSocket(8000);
-            System.out.println("Chat Server started on port 8000.");
+            ServerSocket serverSocket = new ServerSocket(port);
+            System.out.println("Server started on port " + port);
 
             while (true) {
-                // Accept a new client connection
                 Socket clientSocket = serverSocket.accept();
-                // Start a new thread to handle communication with the client
-                new Thread(new ClientHandler(clientSocket)).start();
+                System.out.println("New client connected: " + clientSocket);
+
+                // Create a new client handler for each connected client
+                ClientHandler clientHandler = new ClientHandler(clientSocket);
+                clients.add(clientHandler);
+                clientHandler.start();
             }
-        } catch (IOException ex) {
-            ex.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
-    private class ClientHandler implements Runnable {
+    public void broadcastMessage(String message, ClientHandler sender) {
+        for (ClientHandler client : clients) {
+            if (client != sender) {
+                client.sendMessage(message);
+            }
+        }
+    }
+
+    private class ClientHandler extends Thread {
         private Socket clientSocket;
-        private BufferedReader in;
-        private PrintWriter out;
+        private BufferedReader reader;
+        private PrintWriter writer;
         private String username;
 
         public ClientHandler(Socket clientSocket) {
@@ -42,85 +50,71 @@ public class Server {
         @Override
         public void run() {
             try {
-                // Set up input and output streams for the client
-                in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                out = new PrintWriter(clientSocket.getOutputStream(), true);
+                reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                writer = new PrintWriter(clientSocket.getOutputStream(), true);
 
-                // Get the username from the client
-                username = in.readLine();
-                System.out.println("New client connected: " + username);
+                // Read the username sent by the client
+                username = reader.readLine();
 
-                // Add the client's output stream to the set of client writers
-                clientWriters.add(out);
-                // Broadcast a message to all clients that the user has joined the chat
-                broadcastMessage(username + " has joined the chat.");
+                // Notify all clients about the new user
+                broadcastMessage(username + " has joined the chat.", null);
 
                 String message;
-                while ((message = in.readLine()) != null) {
-                    if (message.startsWith("/private")) {
-                        // Handle private messages
-                        sendPrivateMessage(message);
+                while ((message = reader.readLine()) != null) {
+                    if (message.startsWith("@")) {
+                        // Extract the recipient's username from the message
+                        String recipient = message.substring(1, message.indexOf(' '));
+                        String privateMessage = message.substring(message.indexOf(' ') + 1);
+
+                        // Find the recipient's client handler
+                        ClientHandler recipientHandler = findClientHandler(recipient);
+
+                        if (recipientHandler != null) {
+                            // Send the private message to the recipient
+                            recipientHandler.sendMessage(username + " (Private): " + privateMessage);
+                            // Send a copy of the private message to the sender
+                            // sendMessage("To " + recipient + " (Private): " + privateMessage);
+                        } else {
+                            sendMessage("User " + recipient + " is not online.");
+                        }
                     } else {
-                        // Broadcast the message to all connected clients
-                        broadcastMessage(username + ": " + message);
+                        // Broadcast the message to all clients
+                        broadcastMessage(username + ": " + message, this);
                     }
                 }
-            } catch (IOException ex) {
-                ex.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             } finally {
-                // When the client disconnects, remove its output stream from the set of client writers
-                if (username != null) {
-                    clientWriters.remove(out);
-                    // Broadcast a message to all clients that the user has left the chat
-                    broadcastMessage(username + " has left the chat.");
-                }
+                clients.remove(this);
+
+                // Notify all clients about the user leaving
+                broadcastMessage(username + " has left the chat.", null);
+
                 try {
+                    reader.close();
+                    writer.close();
                     clientSocket.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
         }
 
-        private void broadcastMessage(String message) {
-            // Send the message to all connected clients
-            for (PrintWriter writer : clientWriters) {
-                writer.println(message);
-            }
+        private void sendMessage(String message) {
+            writer.println(message);
         }
 
-        // Method to handle private messages
-        private void sendPrivateMessage(String message) {
-            // Extract the recipient and private message from the command
-            String[] parts = message.split(" ", 3);
-            if (parts.length == 3) {
-                String recipient = parts[1];
-                String privateMsg = parts[2];
-                // Send the private message to the intended recipient
-                for (PrintWriter writer : clientWriters) {
-                    if (writer != out && recipient.equals(username)) {
-                        writer.println("[Private from " + username + "]: " + privateMsg);
-                    } else if (writer == out && recipient.equals(username)) {
-                        writer.println("[Private to " + recipient + "]: " + privateMsg);
-                    }
+        private ClientHandler findClientHandler(String username) {
+            for (ClientHandler client : clients) {
+                if (client.username.equals(username)) {
+                    return client;
                 }
             }
-        }
-
-        // Method to handle disconnection of a client
-        private void disconnect() {
-            try {
-                // Close the socket and input/output streams
-                clientSocket.close();
-                in.close();
-                out.close();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            return null;
         }
     }
 
     public static void main(String[] args) {
-        new Server();
+        Server server = new Server(12345);
     }
 }

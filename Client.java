@@ -1,4 +1,7 @@
+// Client
 import javax.swing.*;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -11,109 +14,162 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class Client extends JFrame {
-    private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
-    private JTextArea chatLog;
+    private JEditorPane chatLog;
     private JTextField messageField;
     private JButton sendButton;
+    private JComboBox<String> emojiDropdown;
+
+    private Socket socket;
+    private BufferedReader reader;
+    private PrintWriter writer;
     private String username;
 
-    public Client(String serverAddress) {
-        setTitle("Chat Client");
-        setSize(400, 300);
+    private static final String[] emojis = {
+        "😊", "😂", "😍", "👍", "👏", "🔥", "🎉", "🌟", "❤️", "✨",
+        "😃", "😄", "😁", "😆", "😎", "😋", "😜", "🙌", "👌", "🌈",
+        "👋", "🙏", "🎶", "🎈", "🎁", "💡", "💪", "💕", "💖", "💯",
+        "🚀", "⭐", "💫", "🌼", "🌺", "🌞", "🍀", "🍕", "🍔", "🍦",
+        "🍓", "🍎", "🍉", "🍩", "🍭", "🍺", "🎸", "🎮", "⚽", "🚲"
+    };
+
+    public Client() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(400, 350);
+        setLocationRelativeTo(null);
 
-        chatLog = new JTextArea();
+        chatLog = new JEditorPane();
         chatLog.setEditable(false);
+        chatLog.setContentType("text/html");
+        chatLog.setPreferredSize(new Dimension(400, 250));
         JScrollPane scrollPane = new JScrollPane(chatLog);
-        add(scrollPane, BorderLayout.CENTER);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 
-        JPanel inputPanel = new JPanel();
-        inputPanel.setLayout(new BorderLayout());
-
-        messageField = new JTextField();
-        inputPanel.add(messageField, BorderLayout.CENTER);
-
+        messageField = new JTextField(20);
         sendButton = new JButton("Send");
+        emojiDropdown = new JComboBox<>(emojis);
+
+        JPanel inputPanel = new JPanel(new BorderLayout());
+        inputPanel.add(messageField, BorderLayout.CENTER);
+        inputPanel.add(emojiDropdown, BorderLayout.WEST);
+        inputPanel.add(sendButton, BorderLayout.EAST);
+
+        setLayout(new BorderLayout());
+        add(scrollPane, BorderLayout.CENTER);
+        add(inputPanel, BorderLayout.SOUTH);
+
         sendButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 sendMessage();
             }
         });
-        inputPanel.add(sendButton, BorderLayout.EAST);
 
-        add(inputPanel, BorderLayout.SOUTH);
+        messageField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendMessage();
+            }
+        });
 
-        setVisible(true);
+        emojiDropdown.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String selectedEmoji = (String) emojiDropdown.getSelectedItem();
+                if (selectedEmoji != null && !selectedEmoji.isEmpty()) {
+                    messageField.setText(messageField.getText() + selectedEmoji);
+                    messageField.requestFocus();
+                }
+            }
+        });
+    }
 
+    private void connectToServer(String username) {
         try {
-            // Establish connection with the server
-            socket = new Socket(serverAddress, 8000);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            setTitle("Client["+username+"]                               Chatter App");
+            this.username = username;
+            socket = new Socket("localhost", 12345); // Replace "localhost" with the server IP address if running on different machines
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            writer = new PrintWriter(socket.getOutputStream(), true);
 
-            // Prompt the user to enter their username
-            username = JOptionPane.showInputDialog(this, "Enter your username:");
-            out.println(username);
+            writer.println(username);
 
-            // Start a new thread to listen for incoming messages from the server
-            new Thread(new IncomingReader()).start();
-        } catch (IOException ex) {
-            ex.printStackTrace();
+            new Thread(new IncomingMessageHandler()).start();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
     private void sendMessage() {
-        // Get the message from the input field and send it to the server
-        String message = messageField.getText();
-        out.println(message);
-        messageField.setText("");
+        String message = messageField.getText().trim();
+        if (!message.isEmpty()) {
+            writer.println(message);
+            messageField.setText("");
+            appendMessage(message, true);
+        }
     }
 
-    private class IncomingReader implements Runnable {
+    private void appendMessage(String message, boolean isMainUser) {
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+        String timestamp = sdf.format(new Date());
+
+        StringBuilder formattedMessage = new StringBuilder("<html><body>");
+
+        if (isMainUser) {
+            if (message.startsWith("To")) {
+                formattedMessage.append("<div style='text-align: right; color: blue;'>");
+                formattedMessage.append("[" + timestamp + "] <br>");
+                formattedMessage.append(message);
+            } else {
+                formattedMessage.append("<div style='text-align: right; color: blue;'>");
+                formattedMessage.append("[" + timestamp + "] <br>");
+                formattedMessage.append("You: " + message);
+            }
+        } else {
+            formattedMessage.append("<div style='text-align: left; color: green;'>");
+            formattedMessage.append("[" + timestamp + "] <br>");
+            formattedMessage.append(message);
+        }
+
+        formattedMessage.append("</div></body></html>");
+
+        SwingUtilities.invokeLater(() -> {
+            HTMLEditorKit editorKit = (HTMLEditorKit) chatLog.getEditorKit();
+            HTMLDocument doc = (HTMLDocument) chatLog.getDocument();
+            try {
+                editorKit.insertHTML(doc, doc.getLength(), formattedMessage.toString(), 0, 0, null);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            chatLog.setCaretPosition(chatLog.getDocument().getLength());
+        });
+    }
+
+    private class IncomingMessageHandler implements Runnable {
         @Override
         public void run() {
             try {
                 String message;
-                while ((message = in.readLine()) != null) {
-                    // Display the incoming message in the chat log
-                    displayMessage(message);
+                while ((message = reader.readLine()) != null) {
+                    appendMessage(message, false);
                 }
-            } catch (IOException ex) {
-                ex.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
 
-    private void displayMessage(String message) {
-        // Add the timestamp to the message and display it in the chat log
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-        String timestamp = sdf.format(new Date());
-
-        chatLog.append("[" + timestamp + "] " + message + "\n");
-    }
-
-    // Method to handle private messages
-    private void sendPrivateMessage(String recipient, String message) {
-        // Send a private message to the server with the recipient's username and the message content
-        out.println("/private " + recipient + " " + message);
-    }
-
-    // Method to handle disconnection from the server
-    private void disconnect() {
-        try {
-            // Close the socket and input/output streams
-            socket.close();
-            in.close();
-            out.close();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-    }
-
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new Client("localhost"));
+        SwingUtilities.invokeLater(() -> {
+            Client clientGUI = new Client();
+            clientGUI.setVisible(true);
+
+            String username = JOptionPane.showInputDialog(clientGUI, "Enter your username:");
+            if (username != null && !username.isEmpty()) {
+                clientGUI.connectToServer(username);
+            } else {
+                JOptionPane.showMessageDialog(clientGUI, "Invalid username. Exiting the application.");
+                System.exit(0);
+            }
+        });
     }
 }
