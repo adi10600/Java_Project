@@ -1,6 +1,29 @@
 # Java_Project: Chat Application
 This is a simple chat application built using Java Swing, allowing users to communicate with each other in real-time.
 The name we have provided as "Chatter App"
+Certainly! Here's an updated version of the implementation detail section, providing a step-by-step guide for running the chat application:
+
+## Implementation Detail
+The chat application is implemented using Java and consists of two main components: the client and the server.
+
+### Client
+1. The client component of the chat application is responsible for creating the graphical user interface (GUI) and handling user interactions.
+2. The GUI is built using Java Swing, a GUI toolkit that provides components such as `JFrame`, `JEditorPane`, `JTextField`, `JButton`, and `JComboBox` for building the application window and capturing user input.
+3. The `JFrame` class is used as the main window container, while the `JEditorPane` component is used to display the chat log. The chat log is rendered as HTML content to support formatting and display timestamps for each message.
+4. The client GUI also includes a `JTextField` for entering messages, a `JButton` for sending messages, and a `JComboBox` for selecting emojis.
+5. The client establishes a connection to the server using the `Socket` class, which allows for bi-directional communication over TCP/IP. The client sends and receives messages to and from the server using a `BufferedReader` for reading from the server and a `PrintWriter` for sending messages.
+
+### Server
+1. The server component of the chat application handles multiple client connections and manages the message broadcasting and private messaging functionality.
+2. The server is implemented using the `ServerSocket` class, which listens for incoming client connections.
+3. When a client connects, the server creates a new `ClientHandler` thread to handle communication with that client. The `ClientHandler` class extends the `Thread` class and is responsible for reading messages from the client and sending them to other clients.
+4. The server maintains a list of connected clients using an `ArrayList`. This list is used to keep track of connected clients and send messages to all clients when a message is received from a client.
+5. Private messages are handled by extracting the recipient's username from the message and finding the corresponding `ClientHandler` object from the list of clients. If the recipient is found, the server sends the private message only to that client.
+
+### Communication Protocol
+1. The chat application uses a simple text-based protocol for communication between the client and the server.
+2. Clients send messages as plain text strings to the server, which processes and broadcasts them to all connected clients.
+3. Private messages are indicated by starting the message with the "@" symbol, followed by the recipient's username and the actual message content.
 
 ### How it Works
 1. Launch the Chat Application by running the `Client` class.
